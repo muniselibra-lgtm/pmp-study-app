@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PMP Process Mapping Game</title>
+    <!-- Tailwind CSS for modern, clean UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Smooth transition for drop zone highlights */
+        .drop-zone {
+            transition: all 0.2s ease-in-out;
+        }
+        /* Visual cue for dragging item */
+        .dragging {
+            opacity: 0.5;
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+    <!-- Header Navigation -->
+    <header class="bg-white border-b border-slate-200 py-4 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 text-white p-2 rounded-lg font-bold tracking-wider text-sm shadow-md shadow-indigo-100">PMP</div>
+                <h1 class="text-xl font-bold text-slate-900 tracking-tight">Exam Prep Suite</h1>
+            </div>
+            <span class="text-xs font-semibold uppercase tracking-widest bg-slate-100 text-slate-600 px-3 py-1.5 rounded-full border border-slate-200">
+                Process Mapping Module
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <main class="flex-grow max-w-6xl mx-auto px-4 py-8 w-full">
+        <!-- Introduction Header -->
+        <div class="mb-8">
+            <h2 class="text-2xl font-bold text-slate-900 mb-2">Process Group Mapping Exercise</h2>
+            <p class="text-slate-600 max-w-2xl">
+                Test your knowledge of the PMBOK® Guide framework. Drag the Project Management Processes from the left column and match them to their correct Process Group targets on the right.
+            </p>
+        </div>
+
+        <!-- Notification Banner -->
+        <div id="successBanner" class="hidden mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center space-x-3 shadow-sm animate-fade-in">
+            <svg class="w-6 h-6 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <div>
+                <strong class="font-semibold block">Perfect Score!</strong>
+                <span class="text-sm">Excellent work. You successfully mapped all processes to their correct structural groups.</span>
+            </div>
+        </div>
+
+        <!-- Interactive Playground Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            
+            <!-- LEFT: Source Processes Pool -->
+            <section class="lg:col-span-5 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Available Processes</h3>
+                <div id="processesPool" class="space-y-3 min-h-[340px] flex flex-col justify-start">
+                    <!-- Dynamic items injected here via JS -->
+                </div>
+            </section>
+
+            <!-- RIGHT: Target Process Groups -->
+            <section class="lg:col-span-7 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Process Groups Targets</h3>
+                
+                <div id="groupsContainer" class="space-y-4">
+                    <!-- Dynamic targets injected here via JS -->
+                </div>
+            </section>
+
+        </div>
+
+        <!-- Controls Dock -->
+        <div class="mt-8 pt-6 border-t border-slate-200 flex flex-wrap gap-4 items-center justify-between">
+            <div class="text-sm text-slate-500" id="scoreTracker">
+                Status: Awaiting validation...
+            </div>
+            <div class="flex space-x-3">
+                <button id="resetBtn" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-100 transition-all text-sm shadow-sm">
+                    Reset Board
+                </button>
+                <button id="checkBtn" class="px-6 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-100 transition-all text-sm shadow-md shadow-indigo-100">
+                    Check Answers
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400">
+        <div class="max-w-6xl mx-auto px-4">
+            Project Management Professional (PMP) is a registered mark of the Project Management Institute, Inc.
+        </div>
+    </footer>
+
+    <!-- Core Interactive Logic Script -->
+    <script>
+        // 1. Core Dataset Configuration
+        const gameData = [
+            { id: "p1", process: "Develop Project Charter", correctGroup: "Initiating" },
+            { id: "p2", process: "Sequence Activities", correctGroup: "Planning" },
+            { id: "p3", process: "Manage Quality", correctGroup: "Executing" },
+            { id: "p4", process: "Monitor Risk", correctGroup: "Monitoring and Controlling" },
+            { id: "p5", process: "Close Project or Phase", correctGroup: "Closing" }
+        ];
+
+        // Unique List of Target Groups preserving correct PM framework order
+        const groupNames = ["Initiating", "Planning", "Executing", "Monitoring and Controlling", "Closing"];
+
+        // State tracker: maps target group name -> dragged process item object
+        let currentPlacements = {
+            "Initiating": null,
+            "Planning": null,
+            "Executing": null,
+            "Monitoring and Controlling": null,
+            "Closing": null
+        };
+
+        // DOM Element Cache
+        const poolEl = document.getElementById("processesPool");
+        const containerEl = document.getElementById("groupsContainer");
+        const checkBtn = document.getElementById("checkBtn");
+        const resetBtn = document.getElementById("resetBtn");
+        const successBanner = document.getElementById("successBanner");
+        const scoreTracker = document.getElementById("scoreTracker");
+
+        // 2. Application Entry Initialization
+        function initGame() {
+            // Clear current states
+            poolEl.innerHTML = "";
+            containerEl.innerHTML = "";
+            successBanner.classList.add("hidden");
+            scoreTracker.textContent = "Status: Changes made. Ready to check.";
+            scoreTracker.className = "text-sm text-slate-500";
+            
+            for (let key in currentPlacements) {
+                currentPlacements[key] = null;
+            }
+
+            // Shuffle processes array using Fisher-Yates method to guarantee true randomness
+            const shuffledData = [...gameData];
+            for (let i = shuffledData.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffledData[i], shuffledData[j]] = [shuffledData[j], shuffledData[i]];
+            }
+
+            // Render Unmapped Process Cards into Source Pool
+            shuffledData.forEach(item => {
+                const card = createProcessCard(item);
+                poolEl.appendChild(card);
+            });
+
+            // Render Target Drop Lanes
+            groupNames.forEach(groupName => {
+                const lane = createTargetLane(groupName);
+                containerEl.appendChild(lane);
+            });
+
+            setupDragAndDropEngine();
+        }
+
+        // DOM Element Creators
+        function createProcessCard(item) {
+            const div = document.createElement("div");
+            div.id = item.id;
+            div.className = "process-card bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm cursor-grab active:cursor-grabbing font-medium text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/30 transition-all select-none flex items-center space-x-3";
+            div.setAttribute("draggable", "true");
+            div.setAttribute("data-correct", item.correctGroup);
+            
+            // Re-usable anchor grip icon
+            div.innerHTML = `
+                <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+                <span>${item.process}</span>
+            `;
+            return div;
+        }
+
+        function createTargetLane(name) {
+            const wrapper = document.createElement("div");
+            wrapper.className = "flex flex-col sm:flex-row sm:items-center bg-slate-50/50 border border-slate-150 p-3 rounded-xl gap-3";
+            
+            wrapper.innerHTML = `
+                <div class="sm:w-1/3 min-w-[160px]">
+                    <span class="text-sm font-bold text-slate-800 block">${name}</span>
+                    <span class="text-xs text-slate-400 font-medium uppercase tracking-wider">Process Group</span>
+                </div>
+                <div class="drop-zone flex-grow min-h-[64px] border-2 border-dashed border-slate-200 bg-white rounded-xl flex items-center justify-center p-2 text-sm text-slate-400 transition-all" data-group="${name}">
+                    Drop process card here
+                </div>
+            `;
+            return wrapper;
+        }
+
+        // 3. HTML5 Drag & Drop Engine Realization
+        function setupDragAndDropEngine() {
+            let draggedItem = null;
+
+            // Event Delegations on Source Pool
+            poolEl.addEventListener("dragstart", (e) => {
+                if (e.target.classList.contains("process-card")) {
+                    draggedItem = e.target;
+                    draggedItem.classList.add("dragging");
+                    e.dataTransfer.setData("text/plain", draggedItem.id);
+                }
+            });
+
+            poolEl.addEventListener("dragend", (e) => {
+                if (e.target.classList.contains("process-card")) {
+                    e.target.classList.remove("dragging");
+                }
+            });
+
+            // Target Group Interaction Registrations
+            const zones = document.querySelectorAll(".drop-zone");
+            zones.forEach(zone => {
+                zone.addEventListener("dragover", (e) => {
+                    e.preventDefault(); // Required API lifecycle to allow landing drops
+                    if(!zone.querySelector(".process-card")) {
+                        zone.classList.add("border-indigo-400", "bg-indigo-50/40");
+                    }
+                });
+
+                zone.addEventListener("dragleave", () => {
+                    zone.classList.remove("border-indigo-400", "bg-indigo-50/40");
+                });
+
+                zone.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    zone.classList.remove("border-indigo-400", "bg-indigo-50/40");
+                    
+                    const targetGroup = zone.getAttribute("data-group");
+                    
+                    // Enforce structural restriction: 1 process item per group box maximum
+                    if (draggedItem && !zone.querySelector(".process-card")) {
+                        // Wipe clear base placeholder styling rules
+                        zone.textContent = "";
+                        zone.appendChild(draggedItem);
+                        zone.classList.remove("border-dashed", "border-slate-200");
+                        zone.classList.add("border-solid", "border-slate-300");
+
+                        // Update business state array
+                        currentPlacements[targetGroup] = draggedItem.id;
+                        clearValidationStyles(draggedItem);
+                    }
+                });
+            });
+
+            // Re-allow returning misplaced or unwanted structural blocks back to source list
+            poolEl.addEventListener("dragover", (e) => e.preventDefault());
+            poolEl.addEventListener("drop", (e) => {
+                e.preventDefault();
+                if (draggedItem) {
+                    // Strip card away from old group alignment
+                    for (let group in currentPlacements) {
+                        if (currentPlacements[group] === draggedItem.id) {
+                            currentPlacements[group] = null;
+                            // Regenerate default placeholder visual fallback on target lane
+                            const respectiveZone = document.querySelector(`[data-group="${group}"]`);
+                            respectiveZone.innerHTML = "Drop process card here";
+                            respectiveZone.className = "drop-zone flex-grow min-h-[64px] border-2 border-dashed border-slate-200 bg-white rounded-xl flex items-center justify-center p-2 text-sm text-slate-400 transition-all";
+                        }
+                    }
+                    poolEl.appendChild(draggedItem);
+                    clearValidationStyles(draggedItem);
+                }
+            });
+        }
+
+        function clearValidationStyles(element) {
+            element.classList.remove("bg-emerald-50", "border-emerald-500", "text-emerald-900", "bg-rose-50", "border-rose-400", "text-rose-900");
+            element.classList.add("bg-slate-50", "border-slate-200", "text-slate-700");
+            scoreTracker.textContent = "Status: Changes made. Ready to check.";
+            scoreTracker.className = "text-sm text-slate-500";
+            successBanner.classList.add("hidden");
+        }
+
+        // 4. Grading System Mechanics
+        function evaluateAnswers() {
+            let correctCount = 0;
+            let totalAssigned = 0;
+
+            groupNames.forEach(group => {
+                const zone = document.querySelector(`[data-group="${group}"]`);
+                const card = zone.querySelector(".process-card");
+
+                if (card) {
+                    totalAssigned++;
+                    const correctGroupMatch = card.getAttribute("data-correct");
+                    
+                    if (correctGroupMatch === group) {
+                        correctCount++;
+                        // Set visual success tokens 
+                        card.classList.remove("bg-slate-50", "border-slate-200", "text-slate-700");
+                        card.classList.add("bg-emerald-50", "border-emerald-500", "text-emerald-900");
+                    } else {
+                        // Set structural warning tokens
+                        card.classList.remove("bg-slate-50", "border-slate-200", "text-slate-700");
+                        card.classList.add("bg-rose-50", "border-rose-400", "text-rose-900");
+                    }
+                }
+            });
+
+            // Score and Feedback output orchestration
+            if (totalAssigned === 0) {
+                scoreTracker.textContent = "Status: Map items first before calculating scores.";
+                scoreTracker.className = "text-sm text-amber-600 font-medium";
+                return;
+            }
+
+            if (correctCount === gameData.length) {
+                successBanner.classList.remove("hidden");
+                scoreTracker.textContent = `Status: Complete score reached (${correctCount}/${gameData.length})`;
+                scoreTracker.className = "text-sm text-emerald-600 font-semibold";
+            } else {
+                scoreTracker.textContent = `Status: Review required. Found ${correctCount} correct mappings out of ${totalAssigned} items placed.`;
+                scoreTracker.className = "text-sm text-rose-600 font-medium";
+            }
+        }
+
+        // Event Hook Bindings
+        checkBtn.addEventListener("click", evaluateAnswers);
+        resetBtn.addEventListener("click", initGame);
+
+        // Bootstrap on Page Loaded Complete Execution
+        window.addEventListener("DOMContentLoaded", initGame);
+    </script>
+</body>
+</html>
